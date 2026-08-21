@@ -1,0 +1,54 @@
+:root {
+  --bg: #0f1113; --panel: #17191c; --line: #24282d;
+  --fg: #e7e9ea; --muted: #868e96; --accent: #ff6b35; --danger: #d64545;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: .08em; text-transform: uppercase; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 32px 0 12px; }
+header { border-bottom: 1px solid var(--line); padding-bottom: 20px; }
+.now { display: flex; align-items: center; gap: 10px; margin: 14px 0; min-height: 24px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: none; }
+.dot.on { background: #3fb950; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+audio { height: 34px; flex: 1 1 240px; }
+button, select {
+  font: inherit; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer;
+}
+button:hover, select:hover { border-color: #3a4149; }
+button.ghost { color: var(--muted); }
+button.danger:hover { color: var(--danger); border-color: var(--danger); }
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mode { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; }
+.mode span { color: var(--muted); font-size: 12px; }
+.mode.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.mode.active strong { color: var(--accent); }
+.check { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button.active { border-color: var(--accent); color: var(--accent); }
+.drop {
+  display: block; border: 1px dashed var(--line); border-radius: 8px; padding: 26px;
+  text-align: center; color: var(--muted); cursor: pointer;
+}
+.drop.over, .drop:hover { border-color: var(--accent); color: var(--accent); }
+.tracks { list-style: none; padding: 0; margin: 14px 0 0; }
+.tracks li {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px;
+  background: var(--panel);
+}
+.tracks .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracks button { border: 0; background: none; color: var(--muted); padding: 0 4px; }
+.tracks button:hover { color: var(--danger); }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 9px 16px; opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.toast.show { opacity: 1; }

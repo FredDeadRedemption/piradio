@@ -1,0 +1,21 @@
+[Unit]
+Description=webradio control api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=webradio
+Group=webradio
+EnvironmentFile=/etc/webradio.env
+WorkingDirectory=/opt/webradio
+ExecStart=/opt/webradio/venv/bin/uvicorn api.app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/webradio
+
+[Install]
+WantedBy=multi-user.target

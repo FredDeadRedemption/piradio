@@ -1,0 +1,20 @@
+[Unit]
+Description=webradio playout (liquidsoap -> icecast)
+After=network-online.target icecast2.service
+Wants=network-online.target icecast2.service
+
+[Service]
+User=webradio
+Group=webradio
+EnvironmentFile=/etc/webradio.env
+ExecStart=/usr/bin/liquidsoap /opt/webradio/radio.liq
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/webradio
+
+[Install]
+WantedBy=multi-user.target
