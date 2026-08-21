@@ -7,6 +7,7 @@ DATA=/srv/webradio
 ENV_FILE=/etc/webradio.env
 PORT_API=8080
 PORT_STREAM=8000
+PORT_PUBLIC=80
 MOUNT=/radio.mp3
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -15,7 +16,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq icecast2 liquidsoap python3-venv python3-pip rsync
+apt-get install -y -qq icecast2 liquidsoap nginx python3-venv python3-pip rsync
 
 # liquidsoap 2.3.2 segfaults on startup against raspberrypi.com's ffmpeg rebuild:
 # its avfilter binding reads pad names off filters that expose none. debian's build is fine.
@@ -61,6 +62,8 @@ ICECAST_ADMIN_PASSWORD=$(gen)
 ICECAST_RELAY_PASSWORD=$(gen)
 ENV
 fi
+# added after the first release, so top it up rather than regenerating secrets
+grep -q WEBRADIO_STREAM_PORT "$ENV_FILE" || echo "WEBRADIO_STREAM_PORT=$PORT_PUBLIC" >> "$ENV_FILE"
 chown root:webradio "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 set -a; . "$ENV_FILE"; set +a
@@ -79,6 +82,15 @@ chmod 640 /etc/icecast2/icecast.xml
 sed -i 's/^ENABLE=.*/ENABLE=true/' /etc/default/icecast2 2>/dev/null || true
 systemctl enable --now icecast2
 systemctl restart icecast2
+
+echo "==> nginx"
+sed -e "s|__MOUNT__|$MOUNT|g" -e "s|__ICECAST_PORT__|$PORT_STREAM|g" \
+    "$SRC/deploy/nginx-webradio.conf.tpl" > /etc/nginx/sites-available/webradio
+ln -sfn /etc/nginx/sites-available/webradio /etc/nginx/sites-enabled/webradio
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
+systemctl enable --now nginx
+systemctl reload nginx
 
 echo "==> application"
 install -d "$APP"
@@ -100,7 +112,7 @@ systemctl restart webradio-liquidsoap webradio-api
 
 cat <<DONE
 
-  stream    http://$(hostname -I | awk '{print $1}'):$PORT_STREAM$MOUNT
+  stream    http://$(hostname -I | awk '{print $1}')$MOUNT
   interface http://$(hostname -I | awk '{print $1}'):$PORT_API
   login     any username / password: $WEBRADIO_PASSWORD
 

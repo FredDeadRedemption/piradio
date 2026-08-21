@@ -11,10 +11,10 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from . import library, liquidsoap, state
 from .config import (
     ICECAST_MOUNT,
-    ICECAST_PORT,
     ICECAST_STATUS_URL,
     MAX_UPLOAD_BYTES,
     PASSWORD,
+    STREAM_PORT,
 )
 
 app = FastAPI(title="webradio", docs_url=None, redoc_url=None)
@@ -80,7 +80,7 @@ async def get_state() -> dict:
         **current,
         "channels": library.channels(),
         "playout": playout,
-        "stream": {"port": ICECAST_PORT, "mount": ICECAST_MOUNT},
+        "stream": {"port": STREAM_PORT, "mount": ICECAST_MOUNT},
         "icecast": await icecast_status(),
     }
 

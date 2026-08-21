@@ -22,6 +22,7 @@
     <hostname>__HOSTNAME__</hostname>
     <listen-socket>
         <port>__PORT__</port>
+        <bind-address>127.0.0.1</bind-address>
     </listen-socket>
 
     <mount type="normal">

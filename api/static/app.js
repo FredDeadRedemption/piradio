@@ -14,7 +14,8 @@ const toast = (message) => {
   setTimeout(() => $("toast").classList.remove("show"), 2600);
 };
 
-const streamUrl = (stream) => `http://${location.hostname}:${stream.port}${stream.mount}`;
+const streamUrl = ({ port, mount }) =>
+  `http://${location.hostname}${port === 80 ? "" : `:${port}`}${mount}`;
 
 function renderStatus(data) {
   $("dot").classList.toggle("on", data.icecast.online && data.playout);

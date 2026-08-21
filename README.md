@@ -6,10 +6,15 @@ modes, and a small web interface for uploading tracks and switching what's on ai
 ```
 browser  ──uploads / mode switch──>  FastAPI  ──unix socket──>  Liquidsoap
                                         │                           │
-                                    /srv/webradio                Icecast2  ──>  listeners
+                                    /srv/webradio                Icecast2 (localhost)
+                                                                    │
+                                                       listeners ──> nginx :80 /radio.mp3
 ```
 
-* **Icecast2** owns the public stream (`http://<pi>:8000/radio.mp3`) and the listener count.
+* **nginx** is the only thing listening on the network: it proxies exactly one path,
+  the mount, and 404s everything else. Icecast's admin panel and status endpoints are
+  not reachable from outside the Pi.
+* **Icecast2** owns the stream and the listener count, bound to `127.0.0.1`.
 * **Liquidsoap** is the playout engine: gapless decoding, three sources behind one
   switch, and a blank fallback so the mount never drops even with an empty library.
 * **FastAPI** owns every decision. Liquidsoap gets two commands (`mode`, `*.reload`)
@@ -75,10 +80,21 @@ libraries to Debian's build in `/etc/apt/preferences.d/webradio-ffmpeg`. On a he
 Pi nothing else links those libraries, so the pin is free. If you later install
 something that wants hardware-accelerated video, revisit it.
 
+## Exposure
+
+nginx serves the mount on port 80 and nothing else, so forwarding port 80 to the Pi
+publishes the stream without publishing anything that can write to it. The upload
+interface stays on `:8080`, unforwarded and LAN-only.
+
+`WEBRADIO_STREAM_PORT` in `/etc/webradio.env` is what the UI advertises to listeners;
+`ICECAST_PORT` is where icecast actually listens behind the proxy. They are different
+numbers on purpose.
+
 ## Security
 
-This is built for a trusted LAN. The UI and API sit behind HTTP Basic auth over
-plain HTTP, so the password is only as private as the network. Uploads are
+The stream is public by design; the control plane is not. The UI and API sit behind
+HTTP Basic auth over plain HTTP, so the password is only as private as the network -
+keep `:8080` off the internet unless you put TLS in front of it first. Uploads are
 restricted to `.mp3`, filenames are sanitised and path-resolved back into their
 pool, and both services run as an unprivileged system user with `ProtectSystem=strict`.
 Do not port-forward this as-is; put it behind a reverse proxy with TLS first.
