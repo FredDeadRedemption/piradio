@@ -1,6 +1,6 @@
 :root {
-  --bg: #0f1113; --panel: #17191c; --line: #24282d;
-  --fg: #e7e9ea; --muted: #868e96; --accent: #ff6b35; --danger: #d64545;
+  --bg: #15181b; --panel: #1e2227; --line: #2f353c;
+  --fg: #edeff1; --muted: #949da6; --accent: #a6c811; --danger: #e05a5a;
 }
 * { box-sizing: border-box; }
 body {
@@ -13,15 +13,15 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: v
 header { border-bottom: 1px solid var(--line); padding-bottom: 20px; }
 .now { display: flex; align-items: center; gap: 10px; margin: 14px 0; min-height: 24px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: none; }
-.dot.on { background: #3fb950; }
+.dot.on { background: var(--accent); }
 .muted { color: var(--muted); }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 audio { height: 34px; flex: 1 1 240px; }
 button, select {
   font: inherit; color: var(--fg); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 2px; padding: 7px 12px; cursor: pointer;
 }
-button:hover, select:hover { border-color: #3a4149; }
+button:hover, select:hover { border-color: #454d56; }
 button.ghost { color: var(--muted); }
 button.danger:hover { color: var(--danger); border-color: var(--danger); }
 .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -33,14 +33,14 @@ button.danger:hover { color: var(--danger); border-color: var(--danger); }
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .tabs button.active { border-color: var(--accent); color: var(--accent); }
 .drop {
-  display: block; border: 1px dashed var(--line); border-radius: 8px; padding: 26px;
+  display: block; border: 1px dashed var(--line); border-radius: 2px; padding: 26px;
   text-align: center; color: var(--muted); cursor: pointer;
 }
 .drop.over, .drop:hover { border-color: var(--accent); color: var(--accent); }
 .tracks { list-style: none; padding: 0; margin: 14px 0 0; }
 .tracks li {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 2px; margin-bottom: 6px;
   background: var(--panel);
 }
 .tracks .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -48,7 +48,7 @@ button.danger:hover { color: var(--danger); border-color: var(--danger); }
 .tracks button:hover { color: var(--danger); }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 2px;
   padding: 9px 16px; opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
