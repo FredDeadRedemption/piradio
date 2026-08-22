@@ -19,6 +19,8 @@ ICECAST_STATUS_URL = f"http://{ICECAST_HOST}:{ICECAST_PORT}/status-json.xsl"
 STREAM_PORT = int(os.environ.get("WEBRADIO_STREAM_PORT", ICECAST_PORT))
 
 PASSWORD = os.environ.get("WEBRADIO_PASSWORD", "")
+PORT_API = int(os.environ.get("WEBRADIO_API_PORT", "8080"))
+DOMAIN = os.environ.get("WEBRADIO_DOMAIN", "")
 MAX_UPLOAD_BYTES = int(os.environ.get("WEBRADIO_MAX_UPLOAD_MB", "300")) * 1024 * 1024
 # uploads stop before the card fills, which would take the whole box down with it
 MIN_FREE_BYTES = int(os.environ.get("WEBRADIO_MIN_FREE_MB", "2048")) * 1024 * 1024

@@ -17,6 +17,7 @@ server {
 
     # lan listeners reach the pi by ip over plain http, with no domain to redirect to
     include /etc/nginx/snippets/webradio-stream.conf;
+    include /etc/nginx/snippets/webradio-listen.conf;
 
     location / {
         return 404;
@@ -53,6 +54,7 @@ server {
     ssl_session_timeout 1d;
 
     include /etc/nginx/snippets/webradio-stream.conf;
+    include /etc/nginx/snippets/webradio-listen.conf;
 
     # public or 404, depending on whether the ui is meant to have a public door
     include /etc/nginx/snippets/webradio-ui.conf;

@@ -52,3 +52,6 @@ button.danger:hover { color: var(--danger); border-color: var(--danger); }
   padding: 9px 16px; opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+.foot { margin: 40px 0 0; text-align: center; }
+.foot a { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-decoration: none; border-bottom: 1px solid var(--line); }
+.foot a:hover { color: var(--accent); border-color: var(--accent); }

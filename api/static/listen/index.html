@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>finrod radio</title>
+<meta name="theme-color" content="#15181b">
+<link rel="manifest" href="/listen/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/listen/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="finrod radio">
+<link rel="stylesheet" href="/listen/listen.css">
+</head>
+<body>
+<main>
+  <h1>finrod radio</h1>
+
+  <button id="play" class="play" aria-label="play">
+    <svg id="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+  </button>
+
+  <p id="title" class="title">&mdash;</p>
+  <p class="meta"><span id="dot" class="dot"></span><span id="status">off air</span></p>
+
+  <p class="control"><a id="control" href="#" hidden></a></p>
+</main>
+<audio id="audio" preload="none" playsinline></audio>
+<script src="/listen/listen.js"></script>
+</body>
+</html>

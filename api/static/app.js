@@ -25,6 +25,14 @@ function renderStatus(data) {
   }
 }
 
+function renderPublicLink(url) {
+  $("public").hidden = !url;
+  if (url) {
+    $("public").href = url;
+    $("public").textContent = `public station \u2192 ${url.replace(/^https?:\/\//, "")}`;
+  }
+}
+
 function renderControls() {
   document.querySelectorAll(".mode").forEach((button) =>
     button.classList.toggle("active", button.dataset.mode === state.mode));
@@ -47,6 +55,7 @@ async function refreshState() {
   state = data;
   if (tab.pool === "channel" && !state.channels.includes(tab.channel)) tab = { pool: "random", channel: null };
   renderStatus(data);
+  renderPublicLink(data.public);
   renderControls();
 }
 

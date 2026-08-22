@@ -104,6 +104,19 @@ render_nginx() {
 install -d /etc/nginx/snippets
 sed -e "s|__MOUNT__|$MOUNT|g" -e "s|__ICECAST_PORT__|$PORT_STREAM|g" \
     "$SRC/deploy/nginx-stream.conf.tpl" > /etc/nginx/snippets/webradio-stream.conf
+sed -e "s|__API_PORT__|$PORT_API|g" \
+    "$SRC/deploy/nginx-listen.conf.tpl" > /etc/nginx/snippets/webradio-listen.conf
+if [[ ${WEBRADIO_PUBLIC_UI:-false} != true ]]; then
+  # nothing else claims the root, so the player gets it
+  cat >> /etc/nginx/snippets/webradio-listen.conf <<LISTEN
+
+location = / {
+    proxy_pass http://127.0.0.1:$PORT_API/listen/;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+}
+LISTEN
+fi
 ln -sfn /etc/nginx/sites-available/webradio /etc/nginx/sites-enabled/webradio
 rm -f /etc/nginx/sites-enabled/default
 

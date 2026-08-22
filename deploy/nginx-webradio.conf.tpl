@@ -18,6 +18,7 @@ server {
     }
 
     include /etc/nginx/snippets/webradio-stream.conf;
+    include /etc/nginx/snippets/webradio-listen.conf;
 
     location / {
         return 404;

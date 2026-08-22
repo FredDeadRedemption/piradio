@@ -1,6 +1,8 @@
+import ipaddress
 import logging
 import secrets
 import shutil
+import socket
 from pathlib import Path
 from typing import Annotated
 
@@ -17,14 +19,17 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 
 from . import library, liquidsoap, state
 from .config import (
+    DOMAIN,
     ICECAST_MOUNT,
     ICECAST_STATUS_URL,
     MAX_UPLOAD_BYTES,
     MIN_FREE_BYTES,
     PASSWORD,
+    PORT_API,
     STREAM_PORT,
 )
 
@@ -62,6 +67,22 @@ async def icecast_status() -> dict:
                 "listeners": source.get("listeners", 0),
             }
     return {"online": False, "title": None, "listeners": 0}
+
+
+def lan_address() -> str:
+    """the pi's own address on the local network; no packets are sent."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.connect(("192.0.2.1", 80))
+        return probe.getsockname()[0]
+
+
+def from_lan(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    caller = forwarded.split(",")[0].strip() or (request.client.host if request.client else "")
+    try:
+        return ipaddress.ip_address(caller).is_private
+    except ValueError:
+        return False
 
 
 def stream_url(request: Request) -> str:
@@ -102,8 +123,17 @@ async def get_state(request: Request) -> dict:
         "channels": library.channels(),
         "playout": playout,
         "stream": {"url": stream_url(request), "mount": ICECAST_MOUNT},
+        "public": f"https://{DOMAIN}" if DOMAIN else None,
         "icecast": await icecast_status(),
     }
+
+
+@app.get("/api/now")
+async def now(request: Request) -> dict:
+    """unauthenticated: what the public player needs and nothing else."""
+    # the control url is a hint for people already inside the network, not an advert
+    control = f"http://{lan_address()}:{PORT_API}" if from_lan(request) else None
+    return {"url": stream_url(request), "control": control, **await icecast_status()}
 
 
 @app.post("/api/mode", dependencies=guard)
@@ -243,3 +273,6 @@ def refresh(pool: str, channel: str | None) -> None:
             liquidsoap.command("reload channel")
     except liquidsoap.LiquidsoapError as exc:
         log.warning("playout reload failed: %s", exc)
+
+
+app.mount("/listen", StaticFiles(directory=STATIC / "listen", html=True), name="listen")
