@@ -4,7 +4,16 @@ from pathlib import Path
 from typing import Annotated
 
 import httpx
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
@@ -53,6 +62,16 @@ async def icecast_status() -> dict:
     return {"online": False, "title": None, "listeners": 0}
 
 
+def stream_url(request: Request) -> str:
+    """listeners reach the mount through whatever front door served this page."""
+    host = request.headers.get("host", "")
+    proxied = request.headers.get("x-forwarded-proto")
+    if proxied:
+        return f"{proxied}://{host}{ICECAST_MOUNT}"
+    port = "" if STREAM_PORT == 80 else f":{STREAM_PORT}"
+    return f"http://{host.split(':')[0]}{port}{ICECAST_MOUNT}"
+
+
 @app.get("/", dependencies=guard, include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
@@ -69,7 +88,7 @@ def stylesheet() -> FileResponse:
 
 
 @app.get("/api/state", dependencies=guard)
-async def get_state() -> dict:
+async def get_state(request: Request) -> dict:
     current = state.read()
     try:
         liquidsoap.command("current_mode")
@@ -80,7 +99,7 @@ async def get_state() -> dict:
         **current,
         "channels": library.channels(),
         "playout": playout,
-        "stream": {"port": STREAM_PORT, "mount": ICECAST_MOUNT},
+        "stream": {"url": stream_url(request), "mount": ICECAST_MOUNT},
         "icecast": await icecast_status(),
     }
 

@@ -14,14 +14,11 @@ const toast = (message) => {
   setTimeout(() => $("toast").classList.remove("show"), 2600);
 };
 
-const streamUrl = ({ port, mount }) =>
-  `http://${location.hostname}${port === 80 ? "" : `:${port}`}${mount}`;
-
 function renderStatus(data) {
   $("dot").classList.toggle("on", data.icecast.online && data.playout);
   $("title").textContent = data.icecast.title || (data.playout ? "starting up" : "playout offline");
   $("listeners").textContent = data.icecast.online ? `${data.icecast.listeners} listening` : "";
-  const url = streamUrl(data.stream);
+  const url = data.stream.url;
   if ($("player").dataset.src !== url) {
     $("player").dataset.src = url;
     $("player").src = url;
@@ -127,7 +124,7 @@ $("delChannel").onclick = async () => {
 $("skip").onclick = () => api("/skip", { method: "POST" }).catch((e) => toast(e.message));
 
 $("copy").onclick = () => {
-  const url = streamUrl(state.stream);
+  const url = state.stream.url;
   navigator.clipboard?.writeText(url).then(() => toast(url), () => toast(url));
 };
 

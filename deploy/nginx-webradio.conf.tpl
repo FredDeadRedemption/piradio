@@ -12,6 +12,11 @@ server {
     # one client could otherwise hold open every icecast slot
     limit_conn webradio_conn 3;
 
+    # certbot validates over plain http, before and after a cert exists
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
     location = __MOUNT__ {
         proxy_pass http://127.0.0.1:__ICECAST_PORT____MOUNT__;
         proxy_http_version 1.1;

@@ -62,6 +62,11 @@ ICECAST_ADMIN_PASSWORD=$(gen)
 ICECAST_RELAY_PASSWORD=$(gen)
 ENV
 fi
+# remembered once passed, so later deploys need it only on the command line the first time
+if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
+  sed -i '/^WEBRADIO_DOMAIN=/d' "$ENV_FILE"
+  echo "WEBRADIO_DOMAIN=$WEBRADIO_DOMAIN" >> "$ENV_FILE"
+fi
 # added after the first release, so top it up rather than regenerating secrets
 grep -q WEBRADIO_STREAM_PORT "$ENV_FILE" || echo "WEBRADIO_STREAM_PORT=$PORT_PUBLIC" >> "$ENV_FILE"
 chown root:webradio "$ENV_FILE"
@@ -84,13 +89,38 @@ systemctl enable --now icecast2
 systemctl restart icecast2
 
 echo "==> nginx"
-sed -e "s|__MOUNT__|$MOUNT|g" -e "s|__ICECAST_PORT__|$PORT_STREAM|g" \
-    "$SRC/deploy/nginx-webradio.conf.tpl" > /etc/nginx/sites-available/webradio
+render_nginx() {
+  sed -e "s|__MOUNT__|$MOUNT|g" \
+      -e "s|__ICECAST_PORT__|$PORT_STREAM|g" \
+      -e "s|__API_PORT__|$PORT_API|g" \
+      -e "s|__MAX_UPLOAD__|$WEBRADIO_MAX_UPLOAD_MB|g" \
+      -e "s|__DOMAIN__|${WEBRADIO_DOMAIN:-}|g" \
+      "$1" > /etc/nginx/sites-available/webradio
+}
 ln -sfn /etc/nginx/sites-available/webradio /etc/nginx/sites-enabled/webradio
 rm -f /etc/nginx/sites-enabled/default
+
+# plain http: the whole config without a domain, and the validation path with one
+render_nginx "$SRC/deploy/nginx-webradio.conf.tpl"
 nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
+
+if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
+  apt-get install -y -qq certbot
+  install -d /var/www/certbot
+  if [[ ! -f /etc/letsencrypt/live/$WEBRADIO_DOMAIN/fullchain.pem ]]; then
+    echo "==> certificate for $WEBRADIO_DOMAIN"
+    certbot certonly --webroot -w /var/www/certbot -d "$WEBRADIO_DOMAIN" \
+      --non-interactive --agree-tos --deploy-hook "systemctl reload nginx" \
+      ${WEBRADIO_LE_EMAIL:+-m "$WEBRADIO_LE_EMAIL"} \
+      ${WEBRADIO_LE_EMAIL:---register-unsafely-without-email}
+  fi
+  # only once tls exists does the ui get a public door
+  render_nginx "$SRC/deploy/nginx-webradio-tls.conf.tpl"
+  nginx -t
+  systemctl reload nginx
+fi
 
 echo "==> application"
 install -d "$APP"
@@ -110,10 +140,18 @@ systemctl daemon-reload
 systemctl enable --now webradio-liquidsoap webradio-api
 systemctl restart webradio-liquidsoap webradio-api
 
+LAN=$(hostname -I | awk '{print $1}')
+if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
+  PUBLIC="  public    https://$WEBRADIO_DOMAIN$MOUNT (stream) and https://$WEBRADIO_DOMAIN (ui)"
+else
+  PUBLIC="  public    not configured (set WEBRADIO_DOMAIN to publish over tls)"
+fi
+
 cat <<DONE
 
-  stream    http://$(hostname -I | awk '{print $1}')$MOUNT
-  interface http://$(hostname -I | awk '{print $1}'):$PORT_API
+  stream    http://$LAN$MOUNT
+  interface http://$LAN:$PORT_API
+$PUBLIC
   login     any username / password: $WEBRADIO_PASSWORD
 
   logs      journalctl -u webradio-liquidsoap -u webradio-api -f
