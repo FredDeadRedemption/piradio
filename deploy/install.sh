@@ -116,7 +116,14 @@ if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
       ${WEBRADIO_LE_EMAIL:+-m "$WEBRADIO_LE_EMAIL"} \
       ${WEBRADIO_LE_EMAIL:---register-unsafely-without-email}
   fi
-  # only once tls exists does the ui get a public door
+  # the ui gets a public door only when explicitly asked for, and only behind tls
+  install -d /etc/nginx/snippets
+  if [[ ${WEBRADIO_PUBLIC_UI:-false} == true ]]; then
+    sed -e "s|__API_PORT__|$PORT_API|g" -e "s|__MAX_UPLOAD__|$WEBRADIO_MAX_UPLOAD_MB|g" \
+        "$SRC/deploy/nginx-ui-public.conf.tpl" > /etc/nginx/snippets/webradio-ui.conf
+  else
+    install -m 644 "$SRC/deploy/nginx-ui-private.conf" /etc/nginx/snippets/webradio-ui.conf
+  fi
   render_nginx "$SRC/deploy/nginx-webradio-tls.conf.tpl"
   nginx -t
   systemctl reload nginx
@@ -134,6 +141,18 @@ chown -R root:webradio "$APP"
 echo "==> validating playout script"
 liquidsoap --check "$APP/radio.liq"
 
+echo "==> hardening"
+apt-get install -y -qq unattended-upgrades fail2ban
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTO'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+AUTO
+install -m 644 "$SRC/deploy/fail2ban-webradio.conf" /etc/fail2ban/filter.d/webradio-auth.conf
+install -m 644 "$SRC/deploy/fail2ban-jail.conf" /etc/fail2ban/jail.d/webradio.conf
+systemctl enable --now unattended-upgrades
+systemctl enable --now fail2ban
+systemctl reload fail2ban 2>/dev/null || systemctl restart fail2ban
+
 echo "==> services"
 install -m 644 "$SRC"/deploy/systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
@@ -142,7 +161,11 @@ systemctl restart webradio-liquidsoap webradio-api
 
 LAN=$(hostname -I | awk '{print $1}')
 if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
-  PUBLIC="  public    https://$WEBRADIO_DOMAIN$MOUNT (stream) and https://$WEBRADIO_DOMAIN (ui)"
+  if [[ ${WEBRADIO_PUBLIC_UI:-false} == true ]]; then
+    PUBLIC="  public    https://$WEBRADIO_DOMAIN$MOUNT (stream) and https://$WEBRADIO_DOMAIN (ui)"
+  else
+    PUBLIC="  public    https://$WEBRADIO_DOMAIN$MOUNT (stream only; ui stays private)"
+  fi
 else
   PUBLIC="  public    not configured (set WEBRADIO_DOMAIN to publish over tls)"
 fi

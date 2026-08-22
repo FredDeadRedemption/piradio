@@ -1,5 +1,6 @@
 import logging
 import secrets
+import shutil
 from pathlib import Path
 from typing import Annotated
 
@@ -22,6 +23,7 @@ from .config import (
     ICECAST_MOUNT,
     ICECAST_STATUS_URL,
     MAX_UPLOAD_BYTES,
+    MIN_FREE_BYTES,
     PASSWORD,
     STREAM_PORT,
 )
@@ -159,6 +161,9 @@ async def upload(
 
     stored, rejected = [], []
     for upload_file in files:
+        if shutil.disk_usage(directory).free < MIN_FREE_BYTES:
+            rejected.append({"name": upload_file.filename, "reason": "not enough free space"})
+            continue
         try:
             name = library.safe_filename(upload_file.filename or "")
         except library.LibraryError as exc:
