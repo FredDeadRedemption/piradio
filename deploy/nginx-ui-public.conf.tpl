@@ -1,5 +1,6 @@
 # reached only over tls, where basic auth is not sent in the clear
 location / {
+    add_header Strict-Transport-Security "max-age=15552000" always;
     limit_req zone=webradio_ui burst=20 nodelay;
     client_max_body_size __MAX_UPLOAD__m;
 

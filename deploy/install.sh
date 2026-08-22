@@ -67,6 +67,10 @@ if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
   sed -i '/^WEBRADIO_DOMAIN=/d' "$ENV_FILE"
   echo "WEBRADIO_DOMAIN=$WEBRADIO_DOMAIN" >> "$ENV_FILE"
 fi
+if [[ -n ${WEBRADIO_PUBLIC_UI:-} ]]; then
+  sed -i '/^WEBRADIO_PUBLIC_UI=/d' "$ENV_FILE"
+  echo "WEBRADIO_PUBLIC_UI=$WEBRADIO_PUBLIC_UI" >> "$ENV_FILE"
+fi
 # added after the first release, so top it up rather than regenerating secrets
 grep -q WEBRADIO_STREAM_PORT "$ENV_FILE" || echo "WEBRADIO_STREAM_PORT=$PORT_PUBLIC" >> "$ENV_FILE"
 chown root:webradio "$ENV_FILE"
@@ -97,6 +101,9 @@ render_nginx() {
       -e "s|__DOMAIN__|${WEBRADIO_DOMAIN:-}|g" \
       "$1" > /etc/nginx/sites-available/webradio
 }
+install -d /etc/nginx/snippets
+sed -e "s|__MOUNT__|$MOUNT|g" -e "s|__ICECAST_PORT__|$PORT_STREAM|g" \
+    "$SRC/deploy/nginx-stream.conf.tpl" > /etc/nginx/snippets/webradio-stream.conf
 ln -sfn /etc/nginx/sites-available/webradio /etc/nginx/sites-enabled/webradio
 rm -f /etc/nginx/sites-enabled/default
 
@@ -117,7 +124,6 @@ if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
       ${WEBRADIO_LE_EMAIL:---register-unsafely-without-email}
   fi
   # the ui gets a public door only when explicitly asked for, and only behind tls
-  install -d /etc/nginx/snippets
   if [[ ${WEBRADIO_PUBLIC_UI:-false} == true ]]; then
     sed -e "s|__API_PORT__|$PORT_API|g" -e "s|__MAX_UPLOAD__|$WEBRADIO_MAX_UPLOAD_MB|g" \
         "$SRC/deploy/nginx-ui-public.conf.tpl" > /etc/nginx/snippets/webradio-ui.conf
