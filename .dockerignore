@@ -1,0 +1,8 @@
+.git
+.github
+.ruff_cache
+__pycache__
+*.pyc
+tests
+docs
+deploy/push.sh

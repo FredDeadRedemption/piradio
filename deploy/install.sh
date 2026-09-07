@@ -62,17 +62,26 @@ ICECAST_ADMIN_PASSWORD=$(gen)
 ICECAST_RELAY_PASSWORD=$(gen)
 ENV
 fi
+
+# values are quoted because names and descriptions contain spaces, which bash would split
+remember() { [[ -n ${2:-} ]] || return 0; sed -i "/^$1=/d" "$ENV_FILE"; echo "$1=\"$2\"" >> "$ENV_FILE"; }
+top_up()   { grep -q "^$1=" "$ENV_FILE" || echo "$1=\"$2\"" >> "$ENV_FILE"; }
+
 # remembered once passed, so later deploys need it only on the command line the first time
-if [[ -n ${WEBRADIO_DOMAIN:-} ]]; then
-  sed -i '/^WEBRADIO_DOMAIN=/d' "$ENV_FILE"
-  echo "WEBRADIO_DOMAIN=$WEBRADIO_DOMAIN" >> "$ENV_FILE"
-fi
-if [[ -n ${WEBRADIO_PUBLIC_UI:-} ]]; then
-  sed -i '/^WEBRADIO_PUBLIC_UI=/d' "$ENV_FILE"
-  echo "WEBRADIO_PUBLIC_UI=$WEBRADIO_PUBLIC_UI" >> "$ENV_FILE"
-fi
-# added after the first release, so top it up rather than regenerating secrets
-grep -q WEBRADIO_STREAM_PORT "$ENV_FILE" || echo "WEBRADIO_STREAM_PORT=$PORT_PUBLIC" >> "$ENV_FILE"
+remember WEBRADIO_DOMAIN      "${WEBRADIO_DOMAIN:-}"
+remember WEBRADIO_PUBLIC_UI   "${WEBRADIO_PUBLIC_UI:-}"
+remember WEBRADIO_NAME        "${WEBRADIO_NAME:-}"
+remember WEBRADIO_DESCRIPTION "${WEBRADIO_DESCRIPTION:-}"
+remember WEBRADIO_TZ          "${WEBRADIO_TZ:-}"
+
+# added after an earlier release, so top them up rather than regenerating the secrets
+top_up WEBRADIO_STREAM_PORT   "$PORT_PUBLIC"
+top_up WEBRADIO_NAME          "webradio"
+top_up WEBRADIO_DESCRIPTION   "a small internet radio station"
+top_up WEBRADIO_BITRATE       "128"
+top_up WEBRADIO_MAX_LISTENERS "50"
+# an sd card that fills takes the whole box down, so keep a wider margin than docker does
+top_up WEBRADIO_MIN_FREE_MB   "2048"
 chown root:webradio "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 set -a; . "$ENV_FILE"; set +a
@@ -84,6 +93,8 @@ sed -e "s|__SOURCE_PASSWORD__|$ICECAST_SOURCE_PASSWORD|" \
     -e "s|__HOSTNAME__|$(hostname)|" \
     -e "s|__LOCATION__|$(hostname)|" \
     -e "s|__PORT__|$PORT_STREAM|" \
+    -e "s|__BIND__|127.0.0.1|" \
+    -e "s|__CLIENTS__|${WEBRADIO_MAX_LISTENERS:-50}|" \
     -e "s|__MOUNT__|$MOUNT|" \
     "$SRC/deploy/icecast.xml.tpl" > /etc/icecast2/icecast.xml
 chown root:icecast /etc/icecast2/icecast.xml
@@ -112,8 +123,9 @@ if [[ ${WEBRADIO_PUBLIC_UI:-false} != true ]]; then
 
 location = / {
     proxy_pass http://127.0.0.1:$PORT_API/listen/;
-    proxy_set_header Host \$host;
+    proxy_set_header Host \$http_host;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 }
 LISTEN
 fi

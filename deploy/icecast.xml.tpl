@@ -3,7 +3,7 @@
     <admin>admin@localhost</admin>
 
     <limits>
-        <clients>50</clients>
+        <clients>__CLIENTS__</clients>
         <sources>2</sources>
         <queue-size>524288</queue-size>
         <client-timeout>30</client-timeout>
@@ -22,7 +22,7 @@
     <hostname>__HOSTNAME__</hostname>
     <listen-socket>
         <port>__PORT__</port>
-        <bind-address>127.0.0.1</bind-address>
+        <bind-address>__BIND__</bind-address>
     </listen-socket>
 
     <mount type="normal">

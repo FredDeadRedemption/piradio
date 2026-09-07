@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  playout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the playout script type-checks against liquidsoap
+        run: |
+          docker run --rm -v "$PWD/deploy/radio.liq:/radio.liq:ro" \
+            -e WEBRADIO_ROOT=/srv/webradio -e ICECAST_HOST=icecast -e ICECAST_PORT=8000 \
+            -e ICECAST_MOUNT=/radio.mp3 -e ICECAST_SOURCE_PASSWORD=x \
+            savonet/liquidsoap:v2.3.3 --check /radio.liq
+
+  stack:
+    runs-on: ubuntu-latest
+    env:
+      WEBRADIO_PASSWORD: ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build
+
+      - name: the station answers
+        run: |
+          for _ in $(seq 40); do
+            curl -fsS --max-time 2 -o /dev/null http://localhost:8000/api/now && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: the mount serves audio
+        run: |
+          curl -sS --max-time 8 -o stream.mp3 http://localhost:8000/radio.mp3 || true
+          test -s stream.mp3
+
+      - name: the control interface is closed without the password
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/state)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u x:ci-password http://localhost:8080/api/state)" = 200
+
+      - name: icecast is not reachable from outside
+        run: test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/status-json.xsl)" = 404
+
+      - if: failure()
+        run: docker compose logs

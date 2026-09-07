@@ -1,6 +1,10 @@
 # webradio playout: four sources, one switch, driven by the api over a unix socket.
 # selection logic lives in the api; this file only decodes, switches and encodes.
 
+def default(value, fallback) =
+  if value == "" then fallback else value end
+end
+
 root = environment.get("WEBRADIO_ROOT")
 media = "#{root}/media"
 state = "#{root}/state"
@@ -96,12 +100,12 @@ server.register(
   fun (_) -> mode())
 
 output.icecast(
-  %mp3(bitrate=128, samplerate=44100, stereo=true),
+  %mp3(bitrate=int_of_string(default(environment.get("WEBRADIO_BITRATE"), "128")), samplerate=44100, stereo=true),
   id="stream",
   host=environment.get("ICECAST_HOST"),
   port=int_of_string(environment.get("ICECAST_PORT")),
   password=environment.get("ICECAST_SOURCE_PASSWORD"),
   mount=environment.get("ICECAST_MOUNT"),
-  name="webradio",
-  description="pi webradio",
+  name=default(environment.get("WEBRADIO_NAME"), "webradio"),
+  description=default(environment.get("WEBRADIO_DESCRIPTION"), "a small internet radio station"),
   radio)

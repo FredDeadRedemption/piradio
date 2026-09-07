@@ -1,6 +1,7 @@
 :root {
   --bg: #15181b; --panel: #1e2227; --line: #2f353c;
   --fg: #edeff1; --muted: #949da6; --accent: #a6c811; --danger: #e05a5a;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -55,3 +56,19 @@ button.danger:hover { color: var(--danger); border-color: var(--danger); }
 .foot { margin: 40px 0 0; text-align: center; }
 .foot a { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-decoration: none; border-bottom: 1px solid var(--line); }
 .foot a:hover { color: var(--accent); border-color: var(--accent); }
+#next { margin-left: auto; }
+.slots { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.slot {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 2px; background: var(--panel);
+}
+.slots .muted { margin: 0; padding: 10px 0; }
+.days { display: flex; gap: 3px; }
+.day { padding: 5px 9px; color: var(--muted); background: transparent; }
+.day.on { color: var(--accent); border-color: var(--accent); }
+.slot input[type=time] {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 2px; padding: 6px 8px;
+}
+.slot .rm { margin-left: auto; border: 0; background: none; color: var(--muted); padding: 0 4px; }
+.slot .rm:hover { color: var(--danger); }

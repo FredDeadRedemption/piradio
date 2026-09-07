@@ -1,10 +1,29 @@
 import json
 
 from . import library, liquidsoap
-from .config import CHANNEL_M3U, MODE_FILE, STATE_FILE
+from .config import CHANNEL_M3U, MEDIA, MODE_FILE, SOCKET, STATE, STATE_FILE
 
 MODES = ("random", "segments", "channel")
-DEFAULT = {"mode": "random", "channel": None, "shuffle": False}
+DEFAULT = {
+    "mode": "random",
+    "channel": None,
+    "shuffle": False,
+    # the scheduled slot on air, and when a manual switch last took the air from it
+    "slot": None,
+    "override_since": None,
+}
+
+
+def ensure() -> None:
+    """build the directory skeleton, so a fresh volume or checkout starts working."""
+    for pool in ("random", "segments", "playlists"):
+        (MEDIA / pool).mkdir(parents=True, exist_ok=True)
+    STATE.mkdir(parents=True, exist_ok=True)
+    SOCKET.parent.mkdir(parents=True, exist_ok=True)
+    if not CHANNEL_M3U.exists():
+        CHANNEL_M3U.write_text("")
+    if not MODE_FILE.exists():
+        write(read())
 
 
 def read() -> dict:

@@ -16,6 +16,9 @@ const setGlyph = (playing) => {
 };
 
 function describe(state) {
+  const station = state.station?.name || "radio";
+  document.title = station;
+  $("station").textContent = station;
   $("title").textContent = state.title || (state.online ? "on air" : "off air");
   $("dot").classList.toggle("on", Boolean(state.online));
   const count = state.listeners === 1 ? "1 listener" : `${state.listeners} listeners`;
@@ -30,8 +33,8 @@ function describe(state) {
 
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: state.title || "finrod radio",
-      artist: "finrod radio",
+      title: state.title || station,
+      artist: station,
       artwork: [
         { src: "/listen/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: "/listen/icon-512.png", sizes: "512x512", type: "image/png" },

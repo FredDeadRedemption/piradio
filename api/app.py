@@ -1,8 +1,9 @@
+import asyncio
 import ipaddress
 import logging
 import secrets
 import shutil
-import socket
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Annotated
 
@@ -17,26 +18,45 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
-from . import library, liquidsoap, state
+from . import library, liquidsoap, schedule, state
 from .config import (
+    DESCRIPTION,
     DOMAIN,
     ICECAST_MOUNT,
     ICECAST_STATUS_URL,
     MAX_UPLOAD_BYTES,
     MIN_FREE_BYTES,
+    NAME,
     PASSWORD,
-    PORT_API,
+    PORT_ADMIN,
     STREAM_PORT,
 )
 
-app = FastAPI(title="webradio", docs_url=None, redoc_url=None)
 log = logging.getLogger("webradio")
 STATIC = Path(__file__).parent / "static"
+STATION = {"name": NAME, "description": DESCRIPTION}
 basic = HTTPBasic(auto_error=False)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    state.ensure()
+    if not PASSWORD:
+        log.warning("WEBRADIO_PASSWORD is unset: anyone who reaches the interface can control it")
+    scheduler = asyncio.create_task(schedule.run())
+    try:
+        yield
+    finally:
+        scheduler.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler
+
+
+app = FastAPI(title=NAME, docs_url=None, redoc_url=None, lifespan=lifespan)
 
 
 def auth(credentials: Annotated[HTTPBasicCredentials | None, Depends(basic)]) -> None:
@@ -69,13 +89,6 @@ async def icecast_status() -> dict:
     return {"online": False, "title": None, "listeners": 0}
 
 
-def lan_address() -> str:
-    """the pi's own address on the local network; no packets are sent."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-        probe.connect(("192.0.2.1", 80))
-        return probe.getsockname()[0]
-
-
 def from_lan(request: Request) -> bool:
     forwarded = request.headers.get("x-forwarded-for", "")
     caller = forwarded.split(",")[0].strip() or (request.client.host if request.client else "")
@@ -83,6 +96,12 @@ def from_lan(request: Request) -> bool:
         return ipaddress.ip_address(caller).is_private
     except ValueError:
         return False
+
+
+def control_url(request: Request) -> str | None:
+    """the control door on whatever address this listener already used to get here."""
+    host = request.headers.get("host", "").split(":")[0]
+    return f"http://{host}:{PORT_ADMIN}" if host and from_lan(request) else None
 
 
 def stream_url(request: Request) -> str:
@@ -93,6 +112,23 @@ def stream_url(request: Request) -> str:
         return f"{proxied}://{host}{ICECAST_MOUNT}"
     port = "" if STREAM_PORT == 80 else f":{STREAM_PORT}"
     return f"http://{host.split(':')[0]}{port}{ICECAST_MOUNT}"
+
+
+def schedule_summary(live: dict) -> dict:
+    """enough for the header to say what is coming, without shipping every entry."""
+    saved = schedule.read()
+    entry, at = schedule.upcoming(saved) if saved["enabled"] else (None, None)
+    return {
+        "enabled": saved["enabled"],
+        "manual": saved["enabled"] and bool(live["override_since"]),
+        # the weekday is resolved here so the page never re-derives it in another timezone
+        "next": {"entry": entry, "day": schedule.DAYS[at.weekday()]} if entry else None,
+    }
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz() -> dict:
+    return {"ok": True}
 
 
 @app.get("/", dependencies=guard, include_in_schema=False)
@@ -120,10 +156,12 @@ async def get_state(request: Request) -> dict:
         playout = False
     return {
         **current,
+        "station": STATION,
         "channels": library.channels(),
         "playout": playout,
         "stream": {"url": stream_url(request), "mount": ICECAST_MOUNT},
         "public": f"https://{DOMAIN}" if DOMAIN else None,
+        "schedule": schedule_summary(current),
         "icecast": await icecast_status(),
     }
 
@@ -132,8 +170,13 @@ async def get_state(request: Request) -> dict:
 async def now(request: Request) -> dict:
     """unauthenticated: what the public player needs and nothing else."""
     # the control url is a hint for people already inside the network, not an advert
-    control = f"http://{lan_address()}:{PORT_API}" if from_lan(request) else None
-    return {"url": stream_url(request), "control": control, **await icecast_status()}
+    control = control_url(request)
+    return {
+        "station": STATION,
+        "url": stream_url(request),
+        "control": control,
+        **await icecast_status(),
+    }
 
 
 @app.post("/api/mode", dependencies=guard)
@@ -151,6 +194,8 @@ def set_mode(payload: dict) -> dict:
         current["channel"] = channel
     if "shuffle" in payload:
         current["shuffle"] = bool(payload["shuffle"])
+    # a hand-picked mode holds the air until the next scheduled slot begins
+    current["override_since"] = schedule.now().isoformat()
 
     state.write(current)
     try:
@@ -167,6 +212,28 @@ def skip() -> dict:
     except liquidsoap.LiquidsoapError as exc:
         raise HTTPException(503, str(exc)) from exc
     return {"ok": True}
+
+
+@app.get("/api/schedule", dependencies=guard)
+def get_schedule() -> dict:
+    return schedule.read()
+
+
+@app.put("/api/schedule", dependencies=guard)
+def put_schedule(payload: dict) -> dict:
+    try:
+        saved = schedule.validate(payload)
+    except schedule.ScheduleError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    was_enabled = schedule.read()["enabled"]
+    schedule.write(saved)
+    if saved["enabled"]:
+        if not was_enabled:
+            # switching the schedule on takes the air back from a manual choice
+            state.write(state.read() | {"slot": None, "override_since": None})
+        schedule.tick()
+    return saved
 
 
 @app.get("/api/tracks", dependencies=guard)
@@ -249,16 +316,20 @@ def remove_channel(name: str) -> Response:
     except library.LibraryError as exc:
         raise HTTPException(400, str(exc)) from exc
 
+    # a slot pointing at a gone channel would fail every later save of the schedule
+    saved = schedule.read()
+    kept = [entry for entry in saved["entries"] if entry.get("channel") != name]
+    if len(kept) != len(saved["entries"]):
+        schedule.write({**saved, "entries": kept})
+
     current = state.read()
     if current["channel"] == name:
         current["channel"] = next(iter(library.channels()), None)
         if current["mode"] == "channel" and current["channel"] is None:
             current["mode"] = "random"
         state.write(current)
-        try:
+        with suppress(liquidsoap.LiquidsoapError):
             state.apply(current)
-        except liquidsoap.LiquidsoapError:
-            pass
     return Response(status_code=204)
 
 
@@ -273,6 +344,29 @@ def refresh(pool: str, channel: str | None) -> None:
             liquidsoap.command("reload channel")
     except liquidsoap.LiquidsoapError as exc:
         log.warning("playout reload failed: %s", exc)
+
+
+# declared before the mount below, which would otherwise serve a stale file from disk
+@app.get("/listen/manifest.webmanifest", include_in_schema=False)
+def manifest() -> JSONResponse:
+    return JSONResponse(
+        {
+            "name": NAME,
+            "short_name": NAME,
+            "description": DESCRIPTION,
+            "start_url": ".",
+            "scope": ".",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#15181b",
+            "theme_color": "#15181b",
+            "icons": [
+                {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            ],
+        },
+        media_type="application/manifest+json",
+    )
 
 
 app.mount("/listen", StaticFiles(directory=STATIC / "listen", html=True), name="listen")

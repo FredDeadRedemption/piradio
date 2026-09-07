@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>webradio</title>
+<link rel="icon" href="/listen/icon-192.png">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <main>
   <header>
-    <h1>webradio</h1>
+    <h1 id="station">webradio</h1>
     <div class="now">
       <span id="dot" class="dot"></span>
       <span id="title">&mdash;</span>
@@ -26,7 +27,7 @@
     <h2>mode</h2>
     <div class="modes">
       <button class="mode" data-mode="random"><strong>random</strong><span>shuffle everything in /random</span></button>
-      <button class="mode" data-mode="segments"><strong>segments</strong><span>shuffle interview clips</span></button>
+      <button class="mode" data-mode="segments"><strong>segments</strong><span>shuffle spoken-word clips</span></button>
       <button class="mode" data-mode="channel"><strong>channel</strong><span>play one playlist in order</span></button>
     </div>
     <div class="row">
@@ -38,11 +39,21 @@
   </section>
 
   <section>
+    <h2>schedule</h2>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="scheduled"> follow schedule</label>
+      <span id="next" class="muted"></span>
+    </div>
+    <div id="slots" class="slots"></div>
+    <button id="addSlot" class="ghost">add slot</button>
+  </section>
+
+  <section>
     <h2>library</h2>
     <div class="tabs" id="tabs"></div>
     <label id="drop" class="drop">
-      <input type="file" id="file" accept="audio/mpeg,.mp3" multiple hidden>
-      drop mp3s here, or click to pick
+      <input type="file" id="file" accept="audio/*" multiple hidden>
+      <span id="dropText">drop audio here, or click to pick</span>
     </label>
     <ul id="tracks" class="tracks"></ul>
   </section>

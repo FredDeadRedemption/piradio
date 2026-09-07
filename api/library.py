@@ -8,7 +8,7 @@ POOLS = ("random", "segments", "channel")
 PLAYLISTS = MEDIA / "playlists"
 CHANNEL_RE = re.compile(r"^[a-z0-9][a-z0-9 _-]{0,47}$")
 UNSAFE_RE = re.compile(r"[^A-Za-z0-9._ -]")
-EXTENSIONS = (".mp3",)
+EXTENSIONS = (".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".wav")
 
 
 class LibraryError(ValueError):

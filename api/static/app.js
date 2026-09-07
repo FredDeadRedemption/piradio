@@ -1,6 +1,11 @@
 const $ = (id) => document.getElementById(id);
-let state = { mode: "random", channel: null, shuffle: false, channels: [] };
+const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const DROP_TEXT = "drop audio here, or click to pick";
+
+let state = { mode: "random", channel: null, shuffle: false, channels: [], station: {} };
 let tab = { pool: "random", channel: null };
+let schedule = { enabled: false, entries: [] };
+let renderedChannels = null;
 
 const api = async (path, options = {}) => {
   const res = await fetch(`/api${path}`, options);
@@ -14,7 +19,11 @@ const toast = (message) => {
   setTimeout(() => $("toast").classList.remove("show"), 2600);
 };
 
+const describe = (entry) => (entry.mode === "channel" ? entry.channel : entry.mode);
+
 function renderStatus(data) {
+  document.title = data.station.name;
+  $("station").textContent = data.station.name;
   $("dot").classList.toggle("on", data.icecast.online && data.playout);
   $("title").textContent = data.icecast.title || (data.playout ? "starting up" : "playout offline");
   $("listeners").textContent = data.icecast.online ? `${data.icecast.listeners} listening` : "";
@@ -29,7 +38,7 @@ function renderPublicLink(url) {
   $("public").hidden = !url;
   if (url) {
     $("public").href = url;
-    $("public").textContent = `public station \u2192 ${url.replace(/^https?:\/\//, "")}`;
+    $("public").textContent = `public station → ${url.replace(/^https?:\/\//, "")}`;
   }
 }
 
@@ -50,6 +59,46 @@ function renderControls() {
   }).join("");
 }
 
+function renderNext(info) {
+  if (!info.enabled) return ($("next").textContent = "");
+  if (!info.next) return ($("next").textContent = "no slots yet");
+  const lead = info.manual ? "on hold, next" : "next";
+  $("next").textContent = `${lead} ${info.next.day} ${info.next.entry.start} · ${describe(info.next.entry)}`;
+}
+
+function slotOptions(entry) {
+  const chosen = entry.mode === "channel" ? `channel:${entry.channel}` : entry.mode;
+  return ["random", "segments", ...state.channels.map((c) => `channel:${c}`)]
+    .map((value) => {
+      const label = value.startsWith("channel:") ? value.slice(8) : value;
+      return `<option value="${value}"${value === chosen ? " selected" : ""}>${label}</option>`;
+    })
+    .join("");
+}
+
+function slotRow(entry) {
+  const days = DAY_LABELS.map((label, day) =>
+    `<button type="button" class="day${entry.days.includes(day) ? " on" : ""}" data-day="${day}">${label}</button>`).join("");
+  const shuffle = entry.mode === "channel"
+    ? `<label class="check"><input type="checkbox" class="sh"${entry.shuffle ? " checked" : ""}> shuffle</label>`
+    : "";
+  return `<div class="slot" data-id="${entry.id}">
+    <div class="days">${days}</div>
+    <input class="time" type="time" value="${entry.start}">
+    <select class="what">${slotOptions(entry)}</select>
+    ${shuffle}
+    <button type="button" class="rm" title="remove slot">&times;</button>
+  </div>`;
+}
+
+function renderSchedule() {
+  $("scheduled").checked = schedule.enabled;
+  renderedChannels = state.channels.join(" ");
+  $("slots").innerHTML = schedule.entries.length
+    ? schedule.entries.map(slotRow).join("")
+    : "<p class='muted'>no slots yet</p>";
+}
+
 async function refreshState() {
   const data = await api("/state");
   state = data;
@@ -57,6 +106,9 @@ async function refreshState() {
   renderStatus(data);
   renderPublicLink(data.public);
   renderControls();
+  renderNext(data.schedule);
+  // re-rendering on every poll would steal focus from a slot being edited
+  if (state.channels.join(" ") !== renderedChannels) renderSchedule();
 }
 
 async function refreshTracks() {
@@ -83,20 +135,36 @@ async function setMode(mode) {
   }
 }
 
+async function saveSchedule() {
+  try {
+    schedule = await api("/schedule", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: $("scheduled").checked, entries: schedule.entries }),
+    });
+  } catch (error) {
+    toast(error.message);
+    // the save was refused, so fall back to what is actually stored
+    schedule = await api("/schedule");
+  }
+  renderSchedule();
+  await refreshState();
+}
+
 async function upload(files) {
   const body = new FormData();
   body.append("pool", tab.pool);
   if (tab.channel) body.append("channel", tab.channel);
   [...files].forEach((file) => body.append("files", file));
 
-  $("drop").textContent = `uploading ${files.length} file(s)...`;
+  $("dropText").textContent = `uploading ${files.length} file(s)...`;
   try {
     const { stored, rejected } = await api("/tracks", { method: "POST", body });
     toast(`${stored.length} uploaded${rejected.length ? `, ${rejected.length} rejected` : ""}`);
   } catch (error) {
     toast(error.message);
   }
-  $("drop").textContent = "drop mp3s here, or click to pick";
+  $("dropText").textContent = DROP_TEXT;
   await refreshTracks();
 }
 
@@ -126,7 +194,9 @@ $("delChannel").onclick = async () => {
   const name = $("channel").value;
   if (!name || !confirm(`delete channel "${name}" and all its files?`)) return;
   await api(`/channels/${encodeURIComponent(name)}`, { method: "DELETE" });
+  schedule = await api("/schedule");
   await refreshState();
+  renderSchedule();
   await refreshTracks();
 };
 
@@ -135,6 +205,49 @@ $("skip").onclick = () => api("/skip", { method: "POST" }).catch((e) => toast(e.
 $("copy").onclick = () => {
   const url = state.stream.url;
   navigator.clipboard?.writeText(url).then(() => toast(url), () => toast(url));
+};
+
+$("scheduled").onchange = () => saveSchedule();
+
+$("addSlot").onclick = () => {
+  schedule.entries.push({ days: [0, 1, 2, 3, 4, 5, 6], start: "08:00", mode: "random", channel: null, shuffle: false });
+  saveSchedule();
+};
+
+$("slots").onclick = (event) => {
+  const row = event.target.closest(".slot");
+  const entry = schedule.entries.find((e) => e.id === row?.dataset.id);
+  if (!entry) return;
+
+  const day = event.target.closest("button.day");
+  if (day) {
+    const number = Number(day.dataset.day);
+    const days = entry.days.includes(number)
+      ? entry.days.filter((d) => d !== number)
+      : [...entry.days, number].sort();
+    if (!days.length) return toast("a slot needs at least one day");
+    entry.days = days;
+  } else if (event.target.closest("button.rm")) {
+    schedule.entries = schedule.entries.filter((e) => e !== entry);
+  } else {
+    return;
+  }
+  saveSchedule();
+};
+
+$("slots").onchange = (event) => {
+  const row = event.target.closest(".slot");
+  const entry = schedule.entries.find((e) => e.id === row?.dataset.id);
+  if (!entry) return;
+  const field = event.target;
+
+  if (field.classList.contains("time")) entry.start = field.value;
+  if (field.classList.contains("sh")) entry.shuffle = field.checked;
+  if (field.classList.contains("what")) {
+    entry.mode = field.value.startsWith("channel:") ? "channel" : field.value;
+    entry.channel = field.value.startsWith("channel:") ? field.value.slice(8) : null;
+  }
+  saveSchedule();
 };
 
 $("tabs").onclick = (event) => {
@@ -161,5 +274,10 @@ $("file").onchange = (event) => upload(event.target.files);
     if (type === "drop") upload(event.dataTransfer.files);
   }));
 
-refreshState().then(refreshTracks).catch((e) => toast(e.message));
+api("/schedule")
+  .then((saved) => { schedule = saved; })
+  .then(refreshState)
+  .then(renderSchedule)
+  .then(refreshTracks)
+  .catch((e) => toast(e.message));
 setInterval(() => refreshState().catch(() => {}), 5000);

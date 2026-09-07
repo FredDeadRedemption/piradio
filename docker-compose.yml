@@ -1,0 +1,83 @@
+name: webradio
+
+x-station: &station
+  WEBRADIO_NAME: ${WEBRADIO_NAME:-webradio}
+  WEBRADIO_DESCRIPTION: ${WEBRADIO_DESCRIPTION:-a small internet radio station}
+  ICECAST_MOUNT: ${ICECAST_MOUNT:-/radio.mp3}
+
+services:
+  # never published: the stream reaches the network through nginx or not at all
+  icecast:
+    build:
+      context: .
+      dockerfile: docker/icecast.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *station
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:-source}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:-admin}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD:-relay}
+      WEBRADIO_MAX_LISTENERS: ${WEBRADIO_MAX_LISTENERS:-100}
+
+  liquidsoap:
+    build:
+      context: .
+      dockerfile: docker/liquidsoap.Dockerfile
+    restart: unless-stopped
+    depends_on: [icecast]
+    environment:
+      <<: *station
+      WEBRADIO_ROOT: /srv/webradio
+      WEBRADIO_BITRATE: ${WEBRADIO_BITRATE:-128}
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:-source}
+    volumes:
+      - media:/srv/webradio/media
+      - state:/srv/webradio/state
+      - run:/srv/webradio/run
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on: [icecast]
+    environment:
+      <<: *station
+      WEBRADIO_ROOT: /srv/webradio
+      WEBRADIO_PASSWORD: ${WEBRADIO_PASSWORD:-}
+      WEBRADIO_TZ: ${WEBRADIO_TZ:-UTC}
+      WEBRADIO_MAX_UPLOAD_MB: ${WEBRADIO_MAX_UPLOAD_MB:-300}
+      WEBRADIO_MIN_FREE_MB: ${WEBRADIO_MIN_FREE_MB:-512}
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+    volumes:
+      - media:/srv/webradio/media
+      - state:/srv/webradio/state
+      - run:/srv/webradio/run
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [api, icecast]
+    environment:
+      <<: *station
+      WEBRADIO_MAX_UPLOAD_MB: ${WEBRADIO_MAX_UPLOAD_MB:-300}
+    ports:
+      - "${WEBRADIO_PORT:-8000}:80"
+      - "${WEBRADIO_ADMIN_PORT:-8080}:8080"
+    volumes:
+      - ./docker/nginx:/etc/nginx/templates:ro
+
+volumes:
+  media:
+  state:
+  # a unix socket, so it stays a docker volume even when the media above is a bind mount
+  run:
